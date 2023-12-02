@@ -8,7 +8,11 @@ const gravatar = require("gravatar");
 
 const bcrypt = require("bcrypt");
 
+const crypto = require("crypto");
+
 const jwt = require("jsonwebtoken");
+
+const sendMessage = require("./helpers/email_send.js");
 
 const loader = require("./models/contacts.js");
 
@@ -222,12 +226,21 @@ const register = async (req, res, next) => {
       },
     });
   }
+
+  const verificationToken = crypto.randomUUID();
   try {
-    const passwordHashed = await bcrypt.hash(password, 10);
+    await sendMessage({
+      to: email,
+      subject: "Welcom to the Contacts List",
+      html: 'To confirm your registration please click on the <a href="">Link</a>',
+      text: `To confirm your registration please open the Link http://localhost:8080//users/verify/:${verificationToken}`,
+    });
+
     await User.create({
       email,
       password: passwordHashed,
       avatarURL: gravatar.url(email),
+      verificationToken: verificationToken,
     });
 
     return res.send({
@@ -271,6 +284,12 @@ const login = async (req, res, next) => {
       });
     } else {
       const matched = bcrypt.compare(password, user.password);
+
+      if (user.verify !== true) {
+        return res
+          .status(401)
+          .send({ message: "Your account is not verified" });
+      }
 
       if (!matched) {
         return res.send({
@@ -386,6 +405,81 @@ const uploadAvatar = async (req, res, next) => {
     next(err);
   }
 };
+
+const verify = async (req, res, next) => {
+  const { verificationToken } = req.params;
+
+  try {
+    const user = await User.findOne({ verificationToken }).exec();
+
+    if (user !== null) {
+      await User.findByIdAndUpdate(user._id, {
+        verificationToken: null,
+        verify: true,
+      });
+
+      res.send({
+        Status: (200)["OK"],
+        ResponseBody: {
+          message: "Verification successful",
+        },
+      });
+    } else {
+      res.semd({
+        Status: (404)["Not Found"],
+        ResponseBody: {
+          message: "User not found",
+        },
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+const verifyRepeatedly = async (req, res, next) => {
+  const { email } = req.body;
+  try {
+    const { error } = await validator.schemaEmail.validateAsync(req.body);
+    if (error) {
+      res.send({
+        Status: (400)["Bad Request"],
+        "Content-Type": "application/json",
+        ResponseBody: "missing required field email",
+      });
+    }
+  } catch (error) {
+    console.error(e);
+    next(e);
+  }
+};
+try {
+  const user = await User.findOne({ email }).exec();
+  if (user.verify !== true) {
+    await User.findByIdAndUpdate(user._id, {
+      verificationToken: null,
+      verify: true,
+    });
+    res.send({
+      Status: (200)["Ok"],
+      "Content-Type": "application/json",
+      ResponseBody: {
+        message: "Verification email sent",
+      },
+    });
+  } else {
+    res.send({
+      Status: (400)["Bad Request"],
+      "Content-Type": "application/json",
+      ResponseBody: {
+        message: "Verification has already been passed",
+      },
+    });
+  }
+} catch (error) {
+  next(error);
+}
+
 module.exports = {
   contactsList,
   getContact,
@@ -401,4 +495,6 @@ module.exports = {
   filteredContacts,
   updateSubscription,
   uploadAvatar,
+  verify,
+  verifyRepeatedly,
 };

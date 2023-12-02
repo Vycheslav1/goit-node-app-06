@@ -16,4 +16,8 @@ router.post("/users/logout", auth, controller.logout);
 
 router.post("/users/current", auth, controller.currentUser);
 
+router.get("/users/verify/:verificationToken", controller.verify);
+
+router.post("/users/verify", controller.verifyRepeatedly);
+
 module.exports = router;

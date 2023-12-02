@@ -40,4 +40,19 @@ const schemaLogin = Joi.object({
   password: Joi.string().alphanum().min(4).required,
 });
 
-module.exports = { contactSchema, schemaId, schemaRegister, schemaLogin };
+const schemaEmail = Joi.object({
+  email: Joi.string()
+    .email({
+      minDomainSegments: 2,
+      tlds: { allow: ["com", "net"] },
+    })
+    .required(),
+});
+
+module.exports = {
+  contactSchema,
+  schemaId,
+  schemaRegister,
+  schemaLogin,
+  schemaEmail,
+};
